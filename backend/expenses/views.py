@@ -31,9 +31,13 @@ class GroupViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         group = serializer.save(created_by=self.request.user)
-        # Creator is automatically an admin member as of today - a group
-        # with zero members would be unusable immediately.
-        GroupMembership.objects.create(group=group, user=self.request.user, joined_at=group.created_at.date(), role="admin")
+        # Creator is automatically an admin member. joined_at defaults to
+        # today, but can be backdated via creator_joined_at - necessary
+        # when a group is being set up specifically to import historical
+        # data (like this assignment's Feb-onward CSV), where the creator
+        # was a member long before the app existed.
+        joined_at = self.request.data.get("creator_joined_at") or group.created_at.date()
+        GroupMembership.objects.create(group=group, user=self.request.user, joined_at=joined_at, role="admin")
 
     @action(detail=True, methods=["post"])
     def add_member(self, request, pk=None):
@@ -206,7 +210,14 @@ class ImportAnomalyResolveView(APIView):
 
 class ImportReportView(APIView):
     """GET /api/import-batches/{id}/report/  -> JSON
-       GET /api/import-batches/{id}/report/?format=text -> downloadable .txt"""
+       GET /api/import-batches/{id}/report/?download=text -> downloadable .txt
+
+    Note: this deliberately does NOT use DRF's built-in ?format= query
+    param (e.g. ?format=json) - that's reserved by DRF's content
+    negotiation system and gets intercepted before it reaches the view,
+    which caused a confusing 404 during testing rather than reaching this
+    code at all. `download` avoids the collision.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, batch_id):
@@ -214,7 +225,7 @@ class ImportReportView(APIView):
         if not GroupMembership.objects.filter(group=batch.group, user=request.user).exists():
             return Response({"detail": "not a member of this group"}, status=403)
 
-        if request.query_params.get("format") == "text":
+        if request.query_params.get("download") == "text":
             text = render_report_text(batch)
             response = HttpResponse(text, content_type="text/plain")
             response["Content-Disposition"] = f'attachment; filename="import_report_{batch.id}.txt"'
