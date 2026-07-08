@@ -99,3 +99,17 @@ one person in `split_with` + payer ≠ that person. Held for approval, and on
 approval becomes a `Settlement` row, never an `Expense` row — Aisha's
 "just tell me who owes whom" number should never be polluted by money that
 already changed hands outside the split logic.
+
+---
+
+## 6. Rounding rule for splits that don't divide evenly
+
+**Problem:** ₹100 split three ways doesn't divide evenly into paise.
+
+**Decision:** Round each base share down to 2 decimal places, then hand out
+the leftover paise one at a time, in participant order, starting from the
+first person in the split. Isolated in a single function
+(`_distribute_remainder` in `services/splitting.py`) specifically because
+this is the kind of rule that gets asked to change on the spot — "round
+up instead," "give the remainder to the payer," "give it to whoever's
+listed last" are all one-line changes to that function, not a refactor.
