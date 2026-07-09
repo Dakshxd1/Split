@@ -5,7 +5,7 @@ import {
   Box, Button, Card, CardActionArea, CardContent, Container, Dialog, DialogActions,
   DialogContent, DialogTitle, TextField, Typography, AppBar, Toolbar, IconButton,
 } from "@mui/material";
-import LogoutIcon from "@mui/icons-material/Logout";
+import LogoutIcon from "@mui/icons-material/esm/Logout";
 import { api } from "../api/client";
 import type { Group } from "../api/types";
 import { useAuth } from "../context/AuthContext";

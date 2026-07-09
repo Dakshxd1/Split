@@ -14,7 +14,7 @@ from expenses.serializers import (
     ImportAnomalySerializer, ImportBatchSerializer, SettlementSerializer,
 )
 from expenses.services.balances import balance_trail_for_user, net_balance_for_group, simplify_debts
-from expenses.services.importer import ImportEngine
+from expenses.services.importer import ImportEngine, rows_from_xlsx
 from expenses.services.report import build_report, render_report_text
 from expenses.services.resolution import ResolutionError, resolve_anomaly
 from expenses.services.splitting import ShareInput, SplitError, compute_split
@@ -25,6 +25,7 @@ User = get_user_model()
 class GroupViewSet(viewsets.ModelViewSet):
     serializer_class = GroupSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         return Group.objects.filter(memberships__user=self.request.user).distinct()
@@ -98,6 +99,7 @@ class GroupViewSet(viewsets.ModelViewSet):
 class ExpenseViewSet(viewsets.ModelViewSet):
     serializer_class = ExpenseSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         qs = Expense.objects.filter(group__memberships__user=self.request.user).distinct()
@@ -158,6 +160,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
 
 class SettlementViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     serializer_class = SettlementSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -170,9 +173,10 @@ class SettlementViewSet(viewsets.ModelViewSet):
 
 
 class ImportUploadView(APIView):
-    """POST /api/groups/{group_id}/import/ with a multipart CSV file field
-    named 'file'. Runs detection immediately; returns the batch with all
-    anomalies attached. Nothing is final until anomalies are resolved."""
+    """POST /api/groups/{group_id}/import/ with a multipart file field named
+    'file' - either .csv or .xlsx. Runs detection immediately; returns the
+    batch with all anomalies attached. Nothing is final until anomalies are
+    resolved."""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, group_id):
@@ -184,9 +188,30 @@ class ImportUploadView(APIView):
         if not upload:
             return Response({"detail": "file field required"}, status=400)
 
-        csv_text = upload.read().decode("utf-8-sig")
+        name_lower = upload.name.lower()
         engine = ImportEngine(group, request.user, filename=upload.name)
-        batch = engine.run(csv_text)
+
+        try:
+            if name_lower.endswith(".xlsx"):
+                rows = rows_from_xlsx(upload)
+                batch = engine.run_rows(rows)
+            elif name_lower.endswith(".csv"):
+                csv_text = upload.read().decode("utf-8-sig")
+                batch = engine.run(csv_text)
+            else:
+                return Response({"detail": "unsupported file type - upload a .csv or .xlsx file"}, status=400)
+        except Exception as e:
+            # A parsing failure here means the file itself couldn't be read
+            # (corrupt, wrong format despite the extension, old .xls saved
+            # with an .xlsx name, etc.) - not a row-level data problem, which
+            # is instead surfaced as an ImportAnomaly. Return the real
+            # exception message so it's visible without digging through
+            # server logs.
+            return Response(
+                {"detail": f"could not read {upload.name}: {type(e).__name__}: {e}"},
+                status=400,
+            )
+
         return Response(ImportBatchSerializer(batch).data, status=201)
 
 

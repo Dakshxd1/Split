@@ -4,7 +4,7 @@ import {
   Box, Button, Chip, Typography, Paper, Stack, Alert, LinearProgress,
   Accordion, AccordionSummary, AccordionDetails, MenuItem, Select,
 } from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandMoreIcon from "@mui/icons-material/esm/ExpandMore";
 import { api } from "../api/client";
 import type { ImportBatch, ImportAnomaly, GroupMembership } from "../api/types";
 
@@ -139,7 +139,7 @@ export default function ImportPanel({ groupId, members }: { groupId: number; mem
 
   return (
     <Box>
-      <Typography variant="h6" mb={2}>Import CSV</Typography>
+      <Typography variant="h6" mb={2}>Import CSV / Excel</Typography>
       <Alert severity="info" sx={{ mb: 2 }}>
         The importer never edits the source file and never guesses. Rows with problems are held here for you
         to review and approve — nothing is deleted or changed without an explicit action from you.
@@ -147,8 +147,13 @@ export default function ImportPanel({ groupId, members }: { groupId: number; mem
 
       <Stack direction="row" spacing={2} alignItems="center" mb={3}>
         <Button variant="outlined" component="label">
-          Choose CSV
-          <input type="file" hidden accept=".csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          Choose CSV or Excel file
+          <input
+            type="file"
+            hidden
+            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
         </Button>
         {file && <Typography variant="body2">{file.name}</Typography>}
         <Button variant="contained" disabled={!file || upload.isPending} onClick={() => upload.mutate()}>

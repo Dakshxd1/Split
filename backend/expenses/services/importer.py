@@ -96,6 +96,50 @@ def _parse_amount(raw):
         anomaly = (anomaly + "; " if anomaly else "") + "amount is negative (refund, not error - see policy)"
     return amt, anomaly
 
+def rows_from_xlsx(file_obj) -> list[dict]:
+    """Reads the first worksheet of an .xlsx file into the same list-of-dicts
+    shape csv.DictReader produces, so ImportEngine.run_rows() can treat CSV
+    and XLSX uploads identically. Header row must match the CSV column
+    names (date, amount, currency, paid_by, description, split_type,
+    split_with, split_details, notes) - matching is case/whitespace
+    insensitive but not otherwise fuzzy, same as the CSV path expects.
+
+    Date/datetime cells are normalized to ISO date strings here. openpyxl
+    returns native datetime/date objects for Excel date cells, and those
+    get stored verbatim into ImportAnomaly.raw_data (a JSON field) whenever
+    a row is flagged - datetime isn't JSON-serializable, so without this
+    normalization every flagged row in an XLSX import throws a 400 at
+    save time. CSV never hits this because csv.DictReader only ever
+    produces strings. "YYYY-MM-DD" is already the first format
+    _parse_date() tries, so this doesn't change parsing behavior at all.
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(file_obj, data_only=True, read_only=True)
+    ws = wb.worksheets[0]
+    rows_iter = ws.iter_rows(values_only=True)
+
+    try:
+        header = next(rows_iter)
+    except StopIteration:
+        return []
+    columns = [(str(h).strip().lower() if h is not None else "") for h in header]
+
+    rows = []
+    for raw_row in rows_iter:
+        if raw_row is None or all(v is None for v in raw_row):
+            continue  # skip blank rows (openpyxl often yields these at sheet end)
+        row = {}
+        for col, value in zip(columns, raw_row):
+            if not col:
+                continue
+            if isinstance(value, datetime):
+                value = value.date().isoformat()
+            elif isinstance(value, date):
+                value = value.isoformat()
+            row[col] = "" if value is None else value
+        rows.append(row)
+    return rows
 
 class ImportEngine:
     def __init__(self, group, uploaded_by, filename="expenses_export.csv"):
@@ -131,8 +175,17 @@ class ImportEngine:
         }
 
     def run(self, csv_text: str):
+        """Back-compat entry point: parses CSV text, then delegates to
+        run_rows(). test_importer.py and any existing callers that pass raw
+        CSV text keep working unchanged."""
         reader = csv.DictReader(io.StringIO(csv_text))
-        rows = list(reader)
+        return self.run_rows(list(reader))
+
+    def run_rows(self, rows: list[dict]):
+        """Shared pipeline for both CSV and XLSX imports: both formats are
+        normalized to a list of {column_name: value} dicts before reaching
+        here, so _process_row doesn't need to know which format it came
+        from."""
         self.batch.total_rows = len(rows)
 
         imported = 0
