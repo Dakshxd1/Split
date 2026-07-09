@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AppBar, Toolbar, Typography, IconButton, Container, Tabs, Tab, Box, CircularProgress } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { AppBar, Toolbar, Typography, Button, Container, Tabs, Tab, Box, CircularProgress } from "@mui/material";
 import { api } from "../api/client";
 import type { Group } from "../api/types";
 import MembersPanel from "../components/MembersPanel";
@@ -28,7 +27,7 @@ export default function GroupDetailPage() {
     <>
       <AppBar position="static" color="default" elevation={1}>
         <Toolbar>
-          <IconButton edge="start" onClick={() => navigate("/groups")}><ArrowBackIcon /></IconButton>
+        <Button onClick={() => navigate("/groups")}>&larr; Back</Button>
           <Typography variant="h6" sx={{ ml: 1 }}>{group.name}</Typography>
         </Toolbar>
       </AppBar>

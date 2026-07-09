@@ -3,9 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Card, CardActionArea, CardContent, Container, Dialog, DialogActions,
-  DialogContent, DialogTitle, TextField, Typography, AppBar, Toolbar, IconButton,
+  DialogContent, DialogTitle, TextField, Typography, AppBar, Toolbar,
 } from "@mui/material";
-import LogoutIcon from "@mui/icons-material/Logout";
 import { api } from "../api/client";
 import type { Group } from "../api/types";
 import { useAuth } from "../context/AuthContext";
@@ -38,7 +37,7 @@ export default function GroupsPage() {
         <Toolbar>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>Shared Expenses</Typography>
           <Typography variant="body2" sx={{ mr: 2 }}>{user?.display_name}</Typography>
-          <IconButton onClick={logout}><LogoutIcon /></IconButton>
+          <Button color="inherit" onClick={logout}>Log out</Button>
         </Toolbar>
       </AppBar>
       <Container sx={{ mt: 4 }}>

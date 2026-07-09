@@ -4,7 +4,6 @@ import {
   Box, Button, Chip, Typography, Paper, Stack, Alert, LinearProgress,
   Accordion, AccordionSummary, AccordionDetails, MenuItem, Select,
 } from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { api } from "../api/client";
 import type { ImportBatch, ImportAnomaly, GroupMembership } from "../api/types";
 
@@ -50,7 +49,7 @@ function AnomalyRow({ anomaly, batchGroup, members }: { anomaly: ImportAnomaly; 
 
   return (
     <Accordion>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+      <AccordionSummary expandIcon={<span style={{ fontSize: 18 }}>&#9660;</span>}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ width: "100%" }}>
           <Chip size="small" label={anomaly.severity} color={anomaly.severity === "blocking" ? "error" : "warning"} />
           <Typography sx={{ flexGrow: 1 }}>
