@@ -6,6 +6,7 @@ import {
 } from "@mui/material";
 import { api } from "../api/client";
 import type { Group, GroupMembership } from "../api/types";
+import PersonChip from "./PersonChip";
 
 export default function MembersPanel({ group }: { group: Group }) {
   const queryClient = useQueryClient();
@@ -31,32 +32,43 @@ export default function MembersPanel({ group }: { group: Group }) {
   return (
     <Box>
       <Typography variant="h6" mb={2}>Members</Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Name</TableCell>
-            <TableCell>Joined</TableCell>
-            <TableCell>Left</TableCell>
-            <TableCell>Role</TableCell>
-            <TableCell />
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {sorted.map((m) => (
-            <TableRow key={m.id}>
-              <TableCell>{m.user.display_name}</TableCell>
-              <TableCell>{m.joined_at}</TableCell>
-              <TableCell>{m.left_at || <Chip size="small" label="active" color="success" />}</TableCell>
-              <TableCell>{m.role}</TableCell>
-              <TableCell align="right">
-                {!m.left_at && (
-                  <Button size="small" color="warning" onClick={() => setLeaveTarget(m)}>Mark left</Button>
-                )}
-              </TableCell>
+
+      {sorted.length === 0 ? (
+        <Box sx={{ border: "1px dashed", borderColor: "divider", borderRadius: 2, p: 4, textAlign: "center" }}>
+          <Typography color="text.secondary">
+            No one's been added yet. New members are added from Django admin for now.
+          </Typography>
+        </Box>
+      ) : (
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Name</TableCell>
+              <TableCell>Joined</TableCell>
+              <TableCell>Left</TableCell>
+              <TableCell>Role</TableCell>
+              <TableCell />
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {sorted.map((m) => (
+              <TableRow key={m.id} sx={{ opacity: m.left_at ? 0.6 : 1 }}>
+                <TableCell>
+                  <PersonChip id={m.user.id} name={m.user.display_name} dimmed={!!m.left_at} />
+                </TableCell>
+                <TableCell>{m.joined_at}</TableCell>
+                <TableCell>{m.left_at || <Chip size="small" label="active" color="success" variant="outlined" />}</TableCell>
+                <TableCell sx={{ textTransform: "capitalize" }}>{m.role}</TableCell>
+                <TableCell align="right">
+                  {!m.left_at && (
+                    <Button size="small" color="error" onClick={() => setLeaveTarget(m)}>Mark left</Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
 
       <Dialog open={!!leaveTarget} onClose={() => setLeaveTarget(null)}>
         <DialogTitle>{leaveTarget?.user.display_name} is leaving the group</DialogTitle>
@@ -70,9 +82,9 @@ export default function MembersPanel({ group }: { group: Group }) {
             onChange={(e) => setLeftAt(e.target.value)} InputLabelProps={{ shrink: true }}
           />
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setLeaveTarget(null)}>Cancel</Button>
-          <Button variant="contained" color="warning" onClick={() => removeMember.mutate()}>Confirm</Button>
+          <Button variant="contained" color="error" onClick={() => removeMember.mutate()}>Confirm</Button>
         </DialogActions>
       </Dialog>
     </Box>
