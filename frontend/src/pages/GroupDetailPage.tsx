@@ -20,19 +20,24 @@ export default function GroupDetailPage() {
   });
 
   if (isLoading || !group) {
-    return <Box display="flex" justifyContent="center" mt={8}><CircularProgress /></Box>;
+    return (
+      <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" mt={12} gap={2}>
+        <CircularProgress size={28} sx={{ color: "text.secondary" }} />
+        <Typography color="text.secondary">Loading group…</Typography>
+      </Box>
+    );
   }
 
   return (
     <>
-      <AppBar position="static" color="default" elevation={1}>
+      <AppBar position="static" color="default">
         <Toolbar>
-        <Button onClick={() => navigate("/groups")}>&larr; Back</Button>
-          <Typography variant="h6" sx={{ ml: 1 }}>{group.name}</Typography>
+          <Button onClick={() => navigate("/groups")} sx={{ mr: 1, minWidth: 0, px: 1 }}>&larr;</Button>
+          <Typography variant="h6">{group.name}</Typography>
         </Toolbar>
       </AppBar>
-      <Container sx={{ mt: 3 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3 }}>
+      <Container sx={{ mt: 4 }}>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, borderBottom: "1px solid", borderColor: "divider" }}>
           <Tab label="Expenses" />
           <Tab label="Balances" />
           <Tab label="Members" />
