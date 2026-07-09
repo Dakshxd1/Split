@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppBar, Toolbar, Typography, IconButton, Container, Tabs, Tab, Box, CircularProgress } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/esm/ArrowBack";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { api } from "../api/client";
 import type { Group } from "../api/types";
 import MembersPanel from "../components/MembersPanel";

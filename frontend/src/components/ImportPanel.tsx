@@ -4,7 +4,7 @@ import {
   Box, Button, Chip, Typography, Paper, Stack, Alert, LinearProgress,
   Accordion, AccordionSummary, AccordionDetails, MenuItem, Select,
 } from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/esm/ExpandMore";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { api } from "../api/client";
 import type { ImportBatch, ImportAnomaly, GroupMembership } from "../api/types";
 
