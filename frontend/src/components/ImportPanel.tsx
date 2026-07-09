@@ -6,6 +6,7 @@ import {
 } from "@mui/material";
 import { api } from "../api/client";
 import type { ImportBatch, ImportAnomaly, GroupMembership } from "../api/types";
+import PersonChip from "./PersonChip";
 
 const ACTION_OPTIONS: Record<string, { value: string; label: string }[]> = {
   duplicate: [
@@ -79,11 +80,19 @@ function AnomalyRow({ anomaly, batchGroup, members }: { anomaly: ImportAnomaly; 
               <>
                 <Select size="small" displayEmpty value={fromUser} onChange={(e) => setFromUser(e.target.value)}>
                   <MenuItem value="" disabled>Paid by…</MenuItem>
-                  {members.map((m) => <MenuItem key={m.user.id} value={m.user.id}>{m.user.display_name}</MenuItem>)}
+                  {members.map((m) => (
+                    <MenuItem key={m.user.id} value={m.user.id}>
+                      <PersonChip id={m.user.id} name={m.user.display_name} size={20} fontSize="0.875rem" />
+                    </MenuItem>
+                  ))}
                 </Select>
                 <Select size="small" displayEmpty value={toUser} onChange={(e) => setToUser(e.target.value)}>
                   <MenuItem value="" disabled>Received by…</MenuItem>
-                  {members.map((m) => <MenuItem key={m.user.id} value={m.user.id}>{m.user.display_name}</MenuItem>)}
+                  {members.map((m) => (
+                    <MenuItem key={m.user.id} value={m.user.id}>
+                      <PersonChip id={m.user.id} name={m.user.display_name} size={20} fontSize="0.875rem" />
+                    </MenuItem>
+                  ))}
                 </Select>
               </>
             )}
