@@ -6,6 +6,7 @@ import {
 } from "@mui/material";
 import { api } from "../api/client";
 import type { GroupMembership, SplitType } from "../api/types";
+import PersonChip from "./PersonChip";
 
 interface Props {
   open: boolean;
@@ -82,7 +83,11 @@ export default function ExpenseForm({ open, onClose, groupId, members }: Props) 
           <FormControl fullWidth>
             <InputLabel>Paid by</InputLabel>
             <Select label="Paid by" value={paidBy} onChange={(e) => setPaidBy(Number(e.target.value))}>
-              {activeMembers.map((m) => <MenuItem key={m.user.id} value={m.user.id}>{m.user.display_name}</MenuItem>)}
+              {activeMembers.map((m) => (
+                <MenuItem key={m.user.id} value={m.user.id}>
+                  <PersonChip id={m.user.id} name={m.user.display_name} size={20} fontSize="0.875rem" />
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
 
@@ -102,7 +107,7 @@ export default function ExpenseForm({ open, onClose, groupId, members }: Props) 
             <Stack direction="row" spacing={2} alignItems="center" key={m.user.id}>
               <FormControlLabel
                 control={<Checkbox checked={!!selected[m.user.id]} onChange={(e) => setSelected({ ...selected, [m.user.id]: e.target.checked })} />}
-                label={m.user.display_name}
+                label={<PersonChip id={m.user.id} name={m.user.display_name} size={20} fontSize="0.875rem" />}
                 sx={{ minWidth: 160 }}
               />
               {splitType !== "equal" && selected[m.user.id] && (
@@ -122,6 +127,7 @@ export default function ExpenseForm({ open, onClose, groupId, members }: Props) 
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="contained"
+          color="secondary"
           disabled={!title || !amount || !paidBy || create.isPending}
           onClick={() => create.mutate()}
         >
