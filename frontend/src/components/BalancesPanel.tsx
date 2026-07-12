@@ -5,9 +5,6 @@ import {
   Table, TableBody, TableCell, TableHead, TableRow, Button, TextField, MenuItem, Select,
   InputLabel, FormControl, Alert, Divider, useTheme, alpha,
 } from "@mui/material";
-import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
-import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import { api } from "../api/client";
 import type { BalancesResponse, BalanceTrailLine, GroupMembership } from "../api/types";
 import PersonChip from "./PersonChip";
@@ -191,10 +188,10 @@ export default function BalancesPanel({ groupId, members }: { groupId: number; m
           variant="contained"
           color="secondary"
           disableElevation
-          startIcon={<AddRoundedIcon />}
           sx={{ borderRadius: 2, px: 2.5, fontWeight: 600 }}
           onClick={() => setShowBlankPaymentForm(true)}
         >
+          <Box component="span" sx={{ mr: 0.75, fontSize: 18, lineHeight: 1 }}>+</Box>
           Record a payment
         </Button>
       </Box>
@@ -267,7 +264,7 @@ export default function BalancesPanel({ groupId, members }: { groupId: number; m
             bgcolor: alpha(theme.palette.success.main, 0.05),
           }}
         >
-          <CheckCircleRoundedIcon sx={{ color: "success.main", fontSize: 32, mb: 0.5 }} />
+          <Box sx={{ color: "success.main", fontSize: 30, mb: 0.5, lineHeight: 1 }}>✓</Box>
           <Typography sx={{ fontWeight: 600 }}>Everyone is settled up</Typography>
           <Typography variant="body2" color="text.secondary">No payments needed right now.</Typography>
         </Paper>
@@ -289,7 +286,7 @@ export default function BalancesPanel({ groupId, members }: { groupId: number; m
           >
             <Stack direction="row" spacing={1.25} alignItems="center">
               <PersonChip id={s.from_user_id} name={s.from_name} size={24} fontWeight={600} />
-              <ArrowForwardRoundedIcon sx={{ color: "text.disabled", fontSize: 20 }} />
+              <Box sx={{ color: "text.disabled", fontSize: 18 }}>→</Box>
               <PersonChip id={s.to_user_id} name={s.to_name} size={24} fontWeight={600} />
             </Stack>
             <Stack direction="row" spacing={1.5} alignItems="center">
