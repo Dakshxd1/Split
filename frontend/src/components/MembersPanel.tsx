@@ -4,7 +4,6 @@ import {
   Box, Typography, Table, TableBody, TableCell, TableHead, TableRow, Chip, Button,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Paper, useTheme, alpha,
 } from "@mui/material";
-import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
 import { api } from "../api/client";
 import type { Group, GroupMembership } from "../api/types";
 import PersonChip from "./PersonChip";
@@ -58,7 +57,7 @@ export default function MembersPanel({ group }: { group: Group }) {
             border: "1px dashed", borderColor: "divider", borderRadius: 2.5, p: 5, textAlign: "center",
           }}
         >
-          <GroupsRoundedIcon sx={{ fontSize: 34, color: "text.disabled", mb: 1 }} />
+          <Box sx={{ fontSize: 30, color: "text.disabled", mb: 1 }}>◍</Box>
           <Typography color="text.secondary">
             No one's been added yet. New members are added from Django admin for now.
           </Typography>
