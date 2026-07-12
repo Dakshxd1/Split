@@ -16,6 +16,7 @@ def build_report(batch) -> dict:
         "anomalies_pending": anomalies.filter(status="pending").count(),
         "anomalies": [
             {
+                "id": a.id,
                 "row_number": a.row_number,
                 "issue_type": a.issue_type,
                 "severity": a.severity,
@@ -25,6 +26,7 @@ def build_report(batch) -> dict:
                 "status": a.status,
                 "resolved_by": a.resolved_by.display_name if a.resolved_by else None,
                 "resolved_at": a.resolved_at.isoformat() if a.resolved_at else None,
+                "raw_data": a.raw_data,
             }
             for a in anomalies
         ],
