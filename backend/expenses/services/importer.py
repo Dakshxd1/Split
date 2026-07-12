@@ -149,17 +149,31 @@ class ImportEngine:
         self._exact_signatures: dict[tuple, int] = {}  # (date, payer_norm, amount) -> row_number
         self._rows_by_date: dict[str, list[tuple]] = {}  # date_str -> [(row_number, title_tokens)]
 
+        # PERFORMANCE FIX: both of these used to be queried fresh on every
+        # single row (resolve_user() did `User.objects.all()` on every
+        # unresolved-name miss; _active_members_on() re-queried
+        # GroupMembership on every row). Neither changes mid-import, so both
+        # are loaded once here instead. With the DB in a different region,
+        # that per-row round trip was the dominant cost - for a ~36 row
+        # file that added up to 150+ extra round trips and was the direct
+        # cause of imports timing out around the 30s mark (Render's proxy
+        # returns a bare 500 to the browser at that point, even though the
+        # request keeps running server-side and finishes moments later -
+        # which is why total_rows still ends up 0 on the batch the client
+        # saw as "failed").
+        self._all_users_by_norm: dict[str, User] = {}
+        for user in User.objects.all():
+            for key in (_norm(user.display_name), _norm(user.username)):
+                if key:
+                    self._all_users_by_norm.setdefault(key, user)
+
+        self._all_memberships = list(GroupMembership.objects.filter(group=group))
+
     def resolve_user(self, raw_name):
         norm = _norm(raw_name)
         if norm is None:
             return None
-        if norm in self._name_cache:
-            return self._name_cache[norm]
-        for user in User.objects.all():
-            if _norm(user.display_name) == norm or _norm(user.username) == norm:
-                self._name_cache[norm] = user
-                return user
-        return None
+        return self._all_users_by_norm.get(norm)
 
     def _flag(self, row_number, raw, issue_type, severity, description, suggested_action=""):
         return ImportAnomaly.objects.create(
@@ -169,10 +183,7 @@ class ImportEngine:
         )
 
     def _active_members_on(self, d):
-        return {
-            m.user_id for m in GroupMembership.objects.filter(group=self.group)
-            if m.is_active_on(d)
-        }
+        return {m.user_id for m in self._all_memberships if m.is_active_on(d)}
 
     def run(self, csv_text: str):
         """Back-compat entry point: parses CSV text, then delegates to
@@ -186,7 +197,15 @@ class ImportEngine:
         normalized to a list of {column_name: value} dicts before reaching
         here, so _process_row doesn't need to know which format it came
         from."""
+        # RELIABILITY FIX: save total_rows immediately, before processing a
+        # single row, instead of only after the whole loop finishes. We
+        # already know this number as soon as the file is read - there's no
+        # reason a slow or interrupted import should leave it at 0. If a
+        # request times out client-side partway through (see the comment
+        # in __init__), the person reloading the page still sees the
+        # correct total instead of a batch that looks empty/broken.
         self.batch.total_rows = len(rows)
+        self.batch.save(update_fields=["total_rows"])
 
         imported = 0
         for i, row in enumerate(rows, start=2):  # row 1 is the header
@@ -194,7 +213,7 @@ class ImportEngine:
                 imported += 1
 
         self.batch.imported_rows = imported
-        self.batch.save(update_fields=["total_rows", "imported_rows"])
+        self.batch.save(update_fields=["imported_rows"])
         return self.batch
 
     @transaction.atomic
@@ -346,11 +365,13 @@ class ImportEngine:
             exchange_rate_used=FX_RATES[currency], converted_inr_amount=converted_amount,
             split_type=split_type, source_row=row_number, import_batch=self.batch,
         )
-        for share in computed:
-            ExpenseParticipant.objects.create(
+        ExpenseParticipant.objects.bulk_create([
+            ExpenseParticipant(
                 expense=expense, user_id=int(share.identifier),
                 share_amount=share.share_amount, share_input=share.share_input,
             )
+            for share in computed
+        ])
 
         for issue_type, desc in warnings:
             self._flag(row_number, row, issue_type, "warning", desc)
