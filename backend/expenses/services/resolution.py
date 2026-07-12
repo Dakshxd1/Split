@@ -28,10 +28,19 @@ def resolve_anomaly(anomaly: ImportAnomaly, action: str, resolved_by, **kwargs) 
                                   severity="warning" rows - blocking rows
                                   need a correction, not a shrug)
       - "import_with_correction": kwargs must supply the corrected field(s)
-                                  (e.g. corrected_date, corrected_currency)
+                                  under `corrections` (e.g. corrections=
+                                  {"currency": "USD"} or {"date": "2026-03-01"}).
+                                  Used for missing_currency / invalid_date.
       - "keep_both"            : duplicate-only - import this row anyway
                                   alongside the one it duplicates
       - "convert_to_settlement": settlement-as-expense rows only
+      - "reassign_names"       : unresolved_name only - kwargs supply
+                                  `name_map` = {original CSV name: user_id},
+                                  covering both an unresolved payer and any
+                                  number of unresolved participant names.
+      - "normalize_split"      : split_percentage_invalid only - rescales
+                                  the declared percentages proportionally so
+                                  they sum to exactly 100, then imports.
     """
     if anomaly.status != "pending":
         raise ResolutionError(f"anomaly {anomaly.id} already resolved ({anomaly.status})")
@@ -42,6 +51,8 @@ def resolve_anomaly(anomaly: ImportAnomaly, action: str, resolved_by, **kwargs) 
         "import_with_correction": _handle_import_with_correction,
         "keep_both": _handle_keep_both,
         "convert_to_settlement": _handle_convert_to_settlement,
+        "reassign_names": _handle_reassign_names,
+        "normalize_split": _handle_normalize_split,
     }
     if action not in handlers:
         raise ResolutionError(f"unknown action: {action}")
@@ -88,6 +99,71 @@ def _handle_convert_to_settlement(anomaly, from_user_id=None, to_user_id=None, *
         note=row.get("notes") or row.get("description") or "",
         source_row=anomaly.row_number, import_batch=anomaly.import_batch,
     )
+
+
+def _handle_reassign_names(anomaly, name_map: dict = None, **_):
+    """unresolved_name fix: name_map maps the exact string that appeared in
+    the CSV (either the whole paid_by field, or one token inside the
+    semicolon-separated split_with field) to the user_id the human picked
+    from the member dropdown. Handles both an unresolved payer (row 11,
+    'Priya S') and unresolved participants (row 23, "Dev's friend Kabir")
+    with the same payload shape, since a row can in principle have both."""
+    if not name_map:
+        raise ResolutionError("reassign_names requires a non-empty name_map")
+
+    row = dict(anomaly.raw_data)
+
+    payer_raw = (row.get("paid_by") or "").strip()
+    if payer_raw in name_map:
+        user = User.objects.get(id=name_map[payer_raw])
+        row["paid_by"] = user.display_name
+
+    split_with_raw = row.get("split_with") or ""
+    tokens = [t.strip() for t in split_with_raw.split(";") if t.strip()]
+    if tokens:
+        new_tokens = []
+        for t in tokens:
+            if t in name_map:
+                user = User.objects.get(id=name_map[t])
+                new_tokens.append(user.display_name)
+            else:
+                new_tokens.append(t)
+        row["split_with"] = ";".join(new_tokens)
+
+    _write_expense_from_row(anomaly, row_override=row)
+
+
+def _handle_normalize_split(anomaly, **_):
+    """split_percentage_invalid fix: rescales each declared percentage
+    proportionally so they sum to exactly 100 (e.g. 30/30/30/20 = 110 ->
+    27.27/27.27/27.27/18.18), then re-runs the normal split computation.
+    Only valid for split_type == 'percentage' rows, which is the only
+    split type that produces this anomaly."""
+    row = dict(anomaly.raw_data)
+    split_type = (row.get("split_type") or "").strip().lower()
+    if split_type != "percentage":
+        raise ResolutionError(f"normalize_split only applies to percentage splits, got {split_type!r}")
+
+    raw_details = row.get("split_details") or ""
+    parsed = []
+    for part in raw_details.split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        name, _, value = part.rpartition(" ")
+        parsed.append((name.strip(), Decimal(value.strip().rstrip("%"))))
+
+    if not parsed:
+        raise ResolutionError("no split_details found to normalize")
+
+    total_pct = sum(v for _, v in parsed)
+    if total_pct <= 0:
+        raise ResolutionError(f"cannot normalize a split totalling {total_pct}%")
+
+    normalized = [(name, (v / total_pct * Decimal("100"))) for name, v in parsed]
+    row["split_details"] = "; ".join(f"{name} {v.quantize(Decimal('0.01'))}%" for name, v in normalized)
+
+    _write_expense_from_row(anomaly, row_override=row)
 
 
 def _write_expense_from_row(anomaly, row_override=None):

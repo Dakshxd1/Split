@@ -28,14 +28,32 @@ def build_report(batch) -> dict:
         "anomalies_pending": pending_count,
         "anomalies": [
             {
+                # BUG FIX: the frontend does `/anomalies/${anomaly.id}/resolve/`
+                # for every action - without this field every resolve click
+                # posted to `.../anomalies/undefined/resolve/` and 404'd.
+                "id": a.id,
+                "import_batch": a.import_batch_id,
                 "row_number": a.row_number,
+                # BUG FIX: also missing - the frontend renders this in the
+                # "raw data" box (JSON.stringify(anomaly.raw_data)) and the
+                # new fix-it forms below read paid_by/split_with/split_details
+                # straight out of it to build their dropdowns.
+                "raw_data": a.raw_data,
                 "issue_type": a.issue_type,
                 "severity": a.severity,
                 "description": a.description,
                 "suggested_action": a.suggested_action,
                 "chosen_action": a.chosen_action,
                 "status": a.status,
-                "resolved_by": a.resolved_by.display_name if a.resolved_by else None,
+                # Matches ImportAnomalySerializer / api/types.ts, which both
+                # declare resolved_by as a user id (number | null), not a
+                # display name. The previous version silently swapped that
+                # for a name here, which is a real type mismatch even though
+                # nothing crashed on it - anything consuming this endpoint
+                # and expecting an id (e.g. a "resolved by you" check) would
+                # have silently misbehaved on a string instead.
+                "resolved_by": a.resolved_by_id,
+                "resolved_by_name": a.resolved_by.display_name if a.resolved_by else None,
                 "resolved_at": a.resolved_at.isoformat() if a.resolved_at else None,
             }
             for a in anomalies
@@ -57,6 +75,6 @@ def render_report_text(batch) -> str:
             f"    {a['description']}\n"
             f"    status: {a['status']}"
             + (f" -> {a['chosen_action']}" if a["chosen_action"] else "")
-            + (f" (by {a['resolved_by']} at {a['resolved_at']})" if a["resolved_by"] else "")
+            + (f" (by {a['resolved_by_name']} at {a['resolved_at']})" if a["resolved_by_name"] else "")
         )
     return "\n".join(lines)

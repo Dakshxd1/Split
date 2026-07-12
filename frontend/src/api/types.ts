@@ -75,6 +75,9 @@ export interface ImportAnomaly {
   chosen_action: string;
   status: "pending" | "resolved" | "rejected";
   resolved_by: number | null;
+  // Added alongside the report.py fix - the report endpoint now sends the
+  // display name too, since the plain-text report needs a name, not an id.
+  resolved_by_name?: string | null;
   resolved_at: string | null;
 }
 
