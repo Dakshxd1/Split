@@ -12,18 +12,29 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function doLogin(user: string, pass: string) {
     setError("");
     setBusy(true);
     try {
-      await login(username, password);
+      await login(user, pass);
       navigate("/groups");
     } catch {
       setError("Invalid username or password.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await doLogin(username, password);
+  }
+
+  // Dev/test helper: fills the form and logs in with test credentials
+  function handleTestLogin() {
+    setUsername("rahul");
+    setPassword("Anshu@123");
+    doLogin("rahul", "Anshu@123");
   }
 
   return (
@@ -35,6 +46,20 @@ export default function LoginPage() {
         <Button fullWidth variant="contained" color="secondary" type="submit" size="large" sx={{ mt: 3 }} disabled={busy}>
           {busy ? "Logging in…" : "Log in"}
         </Button>
+
+        {/* Test-only quick login button */}
+        {import.meta.env.DEV && (
+          <Button
+            fullWidth
+            variant="text"
+            size="small"
+            sx={{ mt: 1 }}
+            disabled={busy}
+            onClick={handleTestLogin}
+          >
+            Quick test login (rahul)
+          </Button>
+        )}
       </form>
       <Box mt={3} textAlign="center" color="text.secondary" fontSize="0.9rem">
         No account? <Link to="/register">Register</Link>
