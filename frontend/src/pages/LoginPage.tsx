@@ -40,14 +40,40 @@ export default function LoginPage() {
   return (
     <AuthLayout title="Welcome back" subtitle="Log in to see where things stand.">
       <form onSubmit={handleSubmit}>
-        <TextField fullWidth label="Username" margin="normal" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
-        <TextField fullWidth label="Password" type="password" margin="normal" value={password} onChange={(e) => setPassword(e.target.value)} />
-        {error && <Alert severity="error" sx={{ mt: 1 }}>{error}</Alert>}
-        <Button fullWidth variant="contained" color="secondary" type="submit" size="large" sx={{ mt: 3 }} disabled={busy}>
+        <TextField
+          fullWidth
+          label="Username"
+          margin="normal"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoFocus
+        />
+        <TextField
+          fullWidth
+          label="Password"
+          type="password"
+          margin="normal"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        {error && (
+          <Alert severity="error" sx={{ mt: 1 }}>
+            {error}
+          </Alert>
+        )}
+        <Button
+          fullWidth
+          variant="contained"
+          color="secondary"
+          type="submit"
+          size="large"
+          sx={{ mt: 3 }}
+          disabled={busy}
+        >
           {busy ? "Logging in…" : "Log in"}
         </Button>
 
-        {/* Test-only quick login button */}
+        {/* Test-only quick login button (dev builds only) */}
         {import.meta.env.DEV && (
           <Button
             fullWidth
