@@ -28,7 +28,19 @@ class GroupViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        return Group.objects.filter(memberships__user=self.request.user).distinct()
+        # select_related collapses the paid_by lookup into the main query
+        # via a SQL JOIN. prefetch_related does the same for the reverse
+        # participants relation (and, nested, each participant's user) in
+        # exactly one extra query each - instead of one query per expense
+        # plus one query per participant, which is what was happening
+        # before and was timing out once this group had 60+ expenses
+        # (worse with the DB in a different region than the backend).
+        qs = (
+            Expense.objects.filter(group__memberships__user=self.request.user)
+            .select_related("paid_by", "group")
+            .prefetch_related("participants__user")
+            .distinct()
+        )
 
     def perform_create(self, serializer):
         group = serializer.save(created_by=self.request.user)
