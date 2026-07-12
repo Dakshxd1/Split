@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Box, Typography, Paper, Stack, Chip, Dialog, DialogTitle, DialogContent, Table,
-  TableBody, TableCell, TableHead, TableRow,
+  Box, Typography, Paper, Stack, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
+  Table, TableBody, TableCell, TableHead, TableRow, Button, TextField, MenuItem, Select,
+  InputLabel, FormControl, Alert,
 } from "@mui/material";
 import { api } from "../api/client";
-import type { BalancesResponse, BalanceTrailLine } from "../api/types";
+import type { BalancesResponse, BalanceTrailLine, GroupMembership } from "../api/types";
 import PersonChip from "./PersonChip";
 
 function money(v: string) {
@@ -53,8 +54,99 @@ function TrailDialog({ groupId, userId, name, onClose }: { groupId: number; user
   );
 }
 
-export default function BalancesPanel({ groupId }: { groupId: number }) {
+function RecordPaymentDialog({
+  groupId, members, onClose, prefill,
+}: {
+  groupId: number;
+  members: GroupMembership[];
+  onClose: () => void;
+  prefill?: { fromUserId: number; toUserId: number; amount: string };
+}) {
+  const queryClient = useQueryClient();
+  const [fromUser, setFromUser] = useState<number | "">(prefill?.fromUserId ?? "");
+  const [toUser, setToUser] = useState<number | "">(prefill?.toUserId ?? "");
+  const [amount, setAmount] = useState(prefill?.amount ?? "");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+
+  const activeMembers = members.filter((m) => !m.left_at);
+
+  const record = useMutation({
+    mutationFn: () =>
+      api.post("/settlements/", {
+        group: groupId, from_user: fromUser, to_user: toUser, amount, date, note,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["balances", groupId] });
+      onClose();
+    },
+    onError: (err: any) => setError(err?.response?.data?.detail || "Could not record this payment."),
+  });
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Record a payment</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} mt={1}>
+          <Typography variant="body2" color="text.secondary">
+            This logs money that's already changed hands — it settles a balance, it's not a new shared expense.
+          </Typography>
+
+          <FormControl fullWidth>
+            <InputLabel>Paid by</InputLabel>
+            <Select label="Paid by" value={fromUser} onChange={(e) => setFromUser(Number(e.target.value))}>
+              {activeMembers.map((m) => (
+                <MenuItem key={m.user.id} value={m.user.id}>
+                  <PersonChip id={m.user.id} name={m.user.display_name} size={20} fontSize="0.875rem" />
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl fullWidth>
+            <InputLabel>Received by</InputLabel>
+            <Select label="Received by" value={toUser} onChange={(e) => setToUser(Number(e.target.value))}>
+              {activeMembers.map((m) => (
+                <MenuItem key={m.user.id} value={m.user.id}>
+                  <PersonChip id={m.user.id} name={m.user.display_name} size={20} fontSize="0.875rem" />
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <TextField label="Amount (₹)" value={amount} onChange={(e) => setAmount(e.target.value)} fullWidth />
+          <TextField
+            label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)}
+            InputLabelProps={{ shrink: true }} fullWidth
+          />
+          <TextField label="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} fullWidth />
+
+          {fromUser && toUser && fromUser === toUser && (
+            <Alert severity="warning">Paid by and received by can't be the same person.</Alert>
+          )}
+          {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          variant="contained"
+          color="secondary"
+          disabled={!fromUser || !toUser || fromUser === toUser || !amount || record.isPending}
+          onClick={() => record.mutate()}
+        >
+          Record payment
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+export default function BalancesPanel({ groupId, members }: { groupId: number; members: GroupMembership[] }) {
   const [trailUser, setTrailUser] = useState<{ id: number; name: string } | null>(null);
+  const [paymentDialog, setPaymentDialog] = useState<null | { fromUserId: number; toUserId: number; amount: string }>(null);
+  const [showBlankPaymentForm, setShowBlankPaymentForm] = useState(false);
 
   const { data } = useQuery({
     queryKey: ["balances", groupId],
@@ -63,7 +155,12 @@ export default function BalancesPanel({ groupId }: { groupId: number }) {
 
   return (
     <Box>
-      <Typography variant="h6" mb={2}>Balances</Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h6">Balances</Typography>
+        <Button variant="contained" color="secondary" onClick={() => setShowBlankPaymentForm(true)}>
+          + Record a payment
+        </Button>
+      </Box>
 
       <Typography variant="subtitle1" mb={1.5}>Net balance per person</Typography>
       <Stack direction="row" spacing={2} flexWrap="wrap" mb={4} useFlexGap>
@@ -106,13 +203,28 @@ export default function BalancesPanel({ groupId }: { groupId: number }) {
               <Typography color="text.secondary">→</Typography>
               <PersonChip id={s.to_user_id} name={s.to_name} size={22} />
             </Stack>
-            <Chip label={money(s.amount)} sx={{ fontVariantNumeric: "tabular-nums" }} />
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Chip label={money(s.amount)} sx={{ fontVariantNumeric: "tabular-nums" }} />
+              <Button
+                size="small" variant="outlined"
+                onClick={() => setPaymentDialog({ fromUserId: s.from_user_id, toUserId: s.to_user_id, amount: s.amount })}
+              >
+                Mark as paid
+              </Button>
+            </Stack>
           </Paper>
         ))}
       </Stack>
 
       {trailUser && (
         <TrailDialog groupId={groupId} userId={trailUser.id} name={trailUser.name} onClose={() => setTrailUser(null)} />
+      )}
+
+      {paymentDialog && (
+        <RecordPaymentDialog groupId={groupId} members={members} prefill={paymentDialog} onClose={() => setPaymentDialog(null)} />
+      )}
+      {showBlankPaymentForm && (
+        <RecordPaymentDialog groupId={groupId} members={members} onClose={() => setShowBlankPaymentForm(false)} />
       )}
     </Box>
   );

@@ -45,7 +45,7 @@ export default function GroupDetailPage() {
         </Tabs>
 
         {tab === 0 && <ExpensesPanel group={group} />}
-        {tab === 1 && <BalancesPanel groupId={group.id} />}
+        {tab === 1 && <BalancesPanel groupId={group.id} members={group.memberships} />}
         {tab === 2 && <MembersPanel group={group} />}
         {tab === 3 && <ImportPanel groupId={group.id} members={group.memberships} />}
       </Container>
