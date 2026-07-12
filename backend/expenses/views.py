@@ -179,6 +179,21 @@ class ImportUploadView(APIView):
     resolved."""
     permission_classes = [permissions.IsAuthenticated]
 
+    def get(self, request, group_id):
+        """
+        List past import batches for this group, newest first. Added
+        because the frontend previously only knew about a batch right
+        after uploading it in that same session - reloading the page (or
+        coming back later to finish resolving anomalies) had no way to
+        find it again, which led to the same file being re-uploaded
+        thinking the first import had been lost.
+        """
+        group = get_object_or_404(Group, id=group_id)
+        if not GroupMembership.objects.filter(group=group, user=request.user).exists():
+            return Response({"detail": "not a member of this group"}, status=403)
+        batches = ImportBatch.objects.filter(group=group).order_by("-uploaded_at")
+        return Response(ImportBatchSerializer(batches, many=True).data)
+
     def post(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         if not GroupMembership.objects.filter(group=group, user=request.user).exists():

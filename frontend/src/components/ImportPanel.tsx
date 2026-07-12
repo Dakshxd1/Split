@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Chip, Typography, Paper, Stack, Alert, LinearProgress,
@@ -42,7 +42,7 @@ function AnomalyRow({ anomaly, batchGroup, members }: { anomaly: ImportAnomaly; 
       }
       return api.post(`/anomalies/${anomaly.id}/resolve/`, payload);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["import-batches", batchGroup] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["import-batch", batchGroup] }),
   });
 
   const options = ACTION_OPTIONS[anomaly.issue_type] || ACTION_OPTIONS.default;
@@ -114,6 +114,24 @@ function AnomalyRow({ anomaly, batchGroup, members }: { anomaly: ImportAnomaly; 
 export default function ImportPanel({ groupId, members }: { groupId: number; members: GroupMembership[] }) {
   const [file, setFile] = useState<File | null>(null);
   const [batchId, setBatchId] = useState<number | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // On mount (and whenever we return to this tab), look up every past
+  // import for this group instead of assuming there is none - this is
+  // what was missing before: a fresh page load had no way to find an
+  // upload that already happened.
+  const { data: pastBatches } = useQuery({
+    queryKey: ["import-batch-list", groupId],
+    queryFn: async () => (await api.get<ImportBatch[]>(`/groups/${groupId}/import/`)).data,
+  });
+
+  // Auto-select the most recent past batch once, the first time the list
+  // loads, so review picks up right where it left off.
+  useEffect(() => {
+    if (batchId === null && pastBatches && pastBatches.length > 0) {
+      setBatchId(pastBatches[0].id);
+    }
+  }, [pastBatches, batchId]);
 
   const upload = useMutation({
     mutationFn: async () => {
@@ -124,11 +142,14 @@ export default function ImportPanel({ groupId, members }: { groupId: number; mem
       });
       return data;
     },
-    onSuccess: (data) => setBatchId(data.id),
+    onSuccess: (data) => {
+      setBatchId(data.id);
+      setFile(null);
+    },
   });
 
   const { data: batch } = useQuery({
-    queryKey: ["import-batches", groupId, batchId],
+    queryKey: ["import-batch", groupId, batchId],
     queryFn: async () => (await api.get<ImportBatch>(`/import-batches/${batchId}/report/`)).data as any,
     enabled: !!batchId,
   });
@@ -147,13 +168,49 @@ export default function ImportPanel({ groupId, members }: { groupId: number; mem
 
   return (
     <Box>
-      <Typography variant="h6" mb={2}>Import CSV / Excel</Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={2}>
+        <Typography variant="h6">Import CSV / Excel</Typography>
+        {pastBatches && pastBatches.length > 1 && (
+          <Button size="small" onClick={() => setPickerOpen((v) => !v)}>
+            {pickerOpen ? "Hide" : "Show"} past uploads ({pastBatches.length})
+          </Button>
+        )}
+      </Box>
+
       <Alert severity="info" sx={{ mb: 2 }}>
         The importer never edits the source file and never guesses. Rows with problems are held here for you
         to review and approve — nothing is deleted or changed without an explicit action from you.
       </Alert>
 
-      <Stack direction="row" spacing={2} alignItems="center" mb={3}>
+      {pastBatches && pastBatches.length > 1 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          This group has {pastBatches.length} separate imports on record. If the same file was uploaded more
+          than once, you likely have duplicate expenses — check the Expenses tab, and remove the extra batch's
+          rows if so (Django admin, or the delete button on each expense).
+        </Alert>
+      )}
+
+      {pickerOpen && pastBatches && (
+        <Paper variant="outlined" sx={{ p: 1, mb: 2 }}>
+          {pastBatches.map((b) => (
+            <Box
+              key={b.id}
+              onClick={() => { setBatchId(b.id); setPickerOpen(false); }}
+              sx={{
+                p: 1, borderRadius: 1, cursor: "pointer",
+                bgcolor: b.id === batchId ? "action.selected" : "transparent",
+                "&:hover": { bgcolor: "action.hover" },
+              }}
+            >
+              <Typography variant="body2">
+                <b>{b.filename}</b> — {new Date(b.uploaded_at).toLocaleString("en-IN")} — {b.total_rows} rows
+              </Typography>
+            </Box>
+          ))}
+        </Paper>
+      )}
+
+      <Stack direction="row" spacing={2} alignItems="center" mb={3} flexWrap="wrap">
         <Button variant="outlined" component="label">
           Choose CSV or Excel file
           <input
@@ -164,7 +221,7 @@ export default function ImportPanel({ groupId, members }: { groupId: number; mem
           />
         </Button>
         {file && <Typography variant="body2">{file.name}</Typography>}
-        <Button variant="contained" disabled={!file || upload.isPending} onClick={() => upload.mutate()}>
+        <Button variant="contained" color="secondary" disabled={!file || upload.isPending} onClick={() => upload.mutate()}>
           {upload.isPending ? "Uploading…" : "Upload & scan"}
         </Button>
       </Stack>
@@ -172,8 +229,8 @@ export default function ImportPanel({ groupId, members }: { groupId: number; mem
 
       {batch && (
         <>
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Stack direction="row" spacing={3}>
+          <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+            <Stack direction="row" spacing={3} flexWrap="wrap">
               <Typography>Total rows: <b>{batch.total_rows}</b></Typography>
               <Typography>Imported clean: <b>{batch.imported_clean}</b></Typography>
               <Typography>Anomalies: <b>{batch.anomalies_total}</b> ({pending.length} pending)</Typography>
@@ -188,6 +245,10 @@ export default function ImportPanel({ groupId, members }: { groupId: number; mem
                 <AnomalyRow key={a.id} anomaly={a} batchGroup={groupId} members={members} />
               ))}
             </>
+          )}
+
+          {pending.length === 0 && (
+            <Alert severity="success" sx={{ mb: 2 }}>All anomalies in this import are resolved.</Alert>
           )}
 
           {resolved.length > 0 && (
