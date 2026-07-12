@@ -28,26 +28,10 @@ class GroupViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        # select_related collapses the paid_by lookup into the main query
-        # via a SQL JOIN. prefetch_related does the same for the reverse
-        # participants relation (and, nested, each participant's user) in
-        # exactly one extra query each - instead of one query per expense
-        # plus one query per participant, which is what was happening
-        # before and was timing out once this group had 60+ expenses
-        # (worse with the DB in a different region than the backend).
-        qs = (
-            Expense.objects.filter(group__memberships__user=self.request.user)
-            .select_related("paid_by", "group")
-            .prefetch_related("participants__user")
-            .distinct()
-        )
+        return Group.objects.filter(memberships__user=self.request.user).distinct()
+
     def perform_create(self, serializer):
         group = serializer.save(created_by=self.request.user)
-        # Creator is automatically an admin member. joined_at defaults to
-        # today, but can be backdated via creator_joined_at - necessary
-        # when a group is being set up specifically to import historical
-        # data (like this assignment's Feb-onward CSV), where the creator
-        # was a member long before the app existed.
         joined_at = self.request.data.get("creator_joined_at") or group.created_at.date()
         GroupMembership.objects.create(group=group, user=self.request.user, joined_at=joined_at, role="admin")
 
@@ -63,8 +47,6 @@ class GroupViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="members/(?P<membership_id>[^/.]+)/leave")
     def remove_member(self, request, pk=None, membership_id=None):
-        """Sets left_at rather than deleting the row - membership history
-        must be preserved (Sam shouldn't retroactively vanish from March)."""
         group = self.get_object()
         membership = get_object_or_404(GroupMembership, id=membership_id, group=group, left_at__isnull=True)
         left_at = request.data.get("left_at")
@@ -73,6 +55,13 @@ class GroupViewSet(viewsets.ModelViewSet):
         membership.left_at = left_at
         membership.save(update_fields=["left_at"])
         return Response(GroupMembershipSerializer(membership).data)
+
+    @action(detail=True, methods=["delete"], url_path="members/(?P<membership_id>[^/.]+)")
+    def delete_member(self, request, pk=None, membership_id=None):
+        group = self.get_object()
+        membership = get_object_or_404(GroupMembership, id=membership_id, group=group)
+        membership.delete()
+        return Response(status=204)
 
     @action(detail=True, methods=["get"])
     def balances(self, request, pk=None):
@@ -113,7 +102,12 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        qs = Expense.objects.filter(group__memberships__user=self.request.user).distinct()
+        qs = (
+            Expense.objects.filter(group__memberships__user=self.request.user)
+            .select_related("paid_by", "group")
+            .prefetch_related("participants__user")
+            .distinct()
+        )
         group_id = self.request.query_params.get("group")
         if group_id:
             qs = qs.filter(group_id=group_id)
@@ -129,13 +123,6 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         return qs.order_by("-date")
 
     def create(self, request, *args, **kwargs):
-        """
-        Manual create (not the default ModelViewSet flow) because expense
-        creation has to run through the same split engine the importer
-        uses - the client sends raw split inputs (percentages, shares,
-        exact amounts), and this computes + validates share_amount
-        server-side rather than trusting whatever the frontend sends.
-        """
         data = request.data
         group = get_object_or_404(Group, id=data["group"])
         if not GroupMembership.objects.filter(group=group, user=request.user).exists():
@@ -184,21 +171,9 @@ class SettlementViewSet(viewsets.ModelViewSet):
 
 
 class ImportUploadView(APIView):
-    """POST /api/groups/{group_id}/import/ with a multipart file field named
-    'file' - either .csv or .xlsx. Runs detection immediately; returns the
-    batch with all anomalies attached. Nothing is final until anomalies are
-    resolved."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, group_id):
-        """
-        List past import batches for this group, newest first. Added
-        because the frontend previously only knew about a batch right
-        after uploading it in that same session - reloading the page (or
-        coming back later to finish resolving anomalies) had no way to
-        find it again, which led to the same file being re-uploaded
-        thinking the first import had been lost.
-        """
         group = get_object_or_404(Group, id=group_id)
         if not GroupMembership.objects.filter(group=group, user=request.user).exists():
             return Response({"detail": "not a member of this group"}, status=403)
@@ -227,12 +202,6 @@ class ImportUploadView(APIView):
             else:
                 return Response({"detail": "unsupported file type - upload a .csv or .xlsx file"}, status=400)
         except Exception as e:
-            # A parsing failure here means the file itself couldn't be read
-            # (corrupt, wrong format despite the extension, old .xls saved
-            # with an .xlsx name, etc.) - not a row-level data problem, which
-            # is instead surfaced as an ImportAnomaly. Return the real
-            # exception message so it's visible without digging through
-            # server logs.
             return Response(
                 {"detail": f"could not read {upload.name}: {type(e).__name__}: {e}"},
                 status=400,
@@ -242,7 +211,6 @@ class ImportUploadView(APIView):
 
 
 class ImportAnomalyResolveView(APIView):
-    """POST /api/anomalies/{id}/resolve/  {"action": "...", ...extra fields}"""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, anomaly_id):
@@ -260,15 +228,6 @@ class ImportAnomalyResolveView(APIView):
 
 
 class ImportReportView(APIView):
-    """GET /api/import-batches/{id}/report/  -> JSON
-       GET /api/import-batches/{id}/report/?download=text -> downloadable .txt
-
-    Note: this deliberately does NOT use DRF's built-in ?format= query
-    param (e.g. ?format=json) - that's reserved by DRF's content
-    negotiation system and gets intercepted before it reaches the view,
-    which caused a confusing 404 during testing rather than reaching this
-    code at all. `download` avoids the collision.
-    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, batch_id):
