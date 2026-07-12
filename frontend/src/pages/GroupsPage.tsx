@@ -10,38 +10,7 @@ import { api } from "../api/client";
 import type { Group } from "../api/types";
 import { useAuth } from "../context/AuthContext";
 import { colorForPerson, initialsFor } from "../theme";
-
-function MemberStack({ group }: { group: Group }) {
-  const active = group.memberships.filter((m) => !m.left_at);
-  const shown = active.slice(0, 4);
-  const overflow = active.length - shown.length;
-
-  if (active.length === 0) {
-    return <Typography variant="caption" color="text.secondary">No active members yet</Typography>;
-  }
-
-  return (
-    <Stack direction="row" alignItems="center">
-      <Stack direction="row" sx={{ "& > *": { ml: -0.75 }, "& > *:first-of-type": { ml: 0 } }}>
-        {shown.map((m) => (
-          <Avatar
-            key={m.id}
-            title={m.user.display_name}
-            sx={{
-              width: 26, height: 26, fontSize: 11, fontWeight: 700,
-              bgcolor: colorForPerson(m.user.id), border: "2px solid", borderColor: "background.paper",
-            }}
-          >
-            {initialsFor(m.user.display_name)}
-          </Avatar>
-        ))}
-      </Stack>
-      {overflow > 0 && (
-        <Typography variant="caption" color="text.secondary" ml={1}>+{overflow} more</Typography>
-      )}
-    </Stack>
-  );
-}
+import MemberAvatarStack from "../components/MemberAvatarStack";
 
 export default function GroupsPage() {
   const { user, logout } = useAuth();
@@ -138,7 +107,7 @@ export default function GroupsPage() {
               <CardActionArea onClick={() => navigate(`/groups/${g.id}`)} sx={{ p: 0.5 }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom noWrap>{g.name}</Typography>
-                  <Box mb={1.5}><MemberStack group={g} /></Box>
+                  <Box mb={1.5}><MemberAvatarStack memberships={g.memberships} /></Box>
                   <Typography variant="body2" color="text.secondary">
                     {g.active_member_count} active member{g.active_member_count !== 1 ? "s" : ""}
                   </Typography>
