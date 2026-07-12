@@ -73,7 +73,7 @@ export default function LoginPage() {
           {busy ? "Logging in…" : "Log in"}
         </Button>
 
-        {/* Test-only quick login button (dev builds only) */}
+        {/* Test-only quick login button — hidden on Vercel prod builds */}
         {import.meta.env.DEV && (
           <Button
             fullWidth
