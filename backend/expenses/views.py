@@ -41,7 +41,6 @@ class GroupViewSet(viewsets.ModelViewSet):
             .prefetch_related("participants__user")
             .distinct()
         )
-
     def perform_create(self, serializer):
         group = serializer.save(created_by=self.request.user)
         # Creator is automatically an admin member. joined_at defaults to
